@@ -4,13 +4,13 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Scanner;
+import java.util.regex.Pattern;
 
 public class Main {
 
@@ -51,44 +51,61 @@ public class Main {
         try (Scanner requestScanner = new Scanner(new File(requestsFile));
              BufferedWriter logWriter = new BufferedWriter(new FileWriter(logFile, true))
         ) {
-            List<Company> result;
+            List<Company> result = new ArrayList<>();
+            boolean fail = false;
+            int requestIndex = 1;
             while (!(query = requestScanner.next()).isEmpty()) {
-                if (query.toLowerCase().equals(SQLKeyWords.SELECT) &&
-                        requestScanner.next().toLowerCase().equals(SQLKeyWords.FROM) &&
-                        requestScanner.next().toLowerCase().equals("company_table") &&
-                        requestScanner.next().toLowerCase().equals(SQLKeyWords.WHERE)) {
-                    query = requestScanner.nextLine();
-                    query = query.trim();
-                    query = query.toLowerCase();
-                    if (query.startsWith(Company.SHORTNAME) &&
-                            (query.charAt(Company.SHORTNAME.length()) == '=')) {
-                        query = query.substring(Company.SHORTNAME.length() + 1);
-                        String name = query.replaceAll("[\"']", "");
-                        result = company_table.findByShortName(name);
-                    } else if (query.startsWith(Company.TYPE_OF_BUSINESS) &&
-                            (query.charAt(Company.TYPE_OF_BUSINESS.length()) == '=')) {
-                        query = query.substring(Company.TYPE_OF_BUSINESS.length() + 1);
-                        String type = query.replaceAll("[\"']", "");
-                        result = company_table.findByTypeOfBusiness(type);
-                    } else if (query.startsWith(Company.EMPLOYEE_COUNT)) {
-                        query = query.substring(Company.EMPLOYEE_COUNT.length());
-                        String[] conditions = query.split(" and ");
-                        if (conditions.length == 2) {
-
+                try {
+                    if (query.toLowerCase().equals(SQLKeyWords.SELECT) &&
+                            requestScanner.next().toLowerCase().equals(SQLKeyWords.FROM) &&
+                            requestScanner.next().toLowerCase().equals(SQLKeyWords.TABLE_NAME) &&
+                            requestScanner.next().toLowerCase().equals(SQLKeyWords.WHERE)) {
+                        query = requestScanner.nextLine();
+                        query = query.toLowerCase();
+                        Scanner lineScan = new Scanner(query);
+                        String tmp;
+                        if (lineScan.findInLine(Pattern.compile(" +?" +
+                                Company.SHORTNAME +
+                                " +?= +?")) != null) {
+                            String name = lineScan.findInLine(Pattern.compile("[\"'][a-zA-Z][\"']"));
+                            result = company_table.findByShortName(name.substring(1, name.length() - 1));
+                        } else if (lineScan.findInLine(Pattern.compile("( +)?" +
+                                Company.TYPE_OF_BUSINESS +
+                                "( +)?=( +)?")) != null) {
+                            String type = lineScan.findInLine(Pattern.compile("[\"'][a-zA-Z][\"']"));
+                            result = company_table.findByTypeOfBusiness(type.substring(1, type.length() - 1));
+                        } else if ((tmp = lineScan.findInLine(Pattern.compile(Company.EMPLOYEE_COUNT + "( +)?(>=|>)"))) != null) {
+                            int from = -1;
+                            int to = -1;
+                            from = lineScan.nextInt();
+                            if (tmp.charAt(tmp.length() - 1) != '=') {
+                                ++from;
+                            }
+                            if (lineScan.findInLine(SQLKeyWords.AND) != null &&
+                                    null != (tmp = lineScan.findInLine(Pattern.compile(Company.EMPLOYEE_COUNT + "( +)?(<=|<)")))) {
+                                to = lineScan.nextInt();
+                                if (tmp.charAt(tmp.length() - 1) != '=') {
+                                    --to;
+                                }
+                            }
+                            result = company_table.findByNumberOfEmployees(from, to);
+                        } else {
+                            fail = true;
                         }
                     } else {
-
+                        fail = true;
                     }
-
+                } catch(Exception e) {
+                    fail = true;
                 }
+                BufferedWriter bw = new BufferedWriter(new FileWriter("request" + requestIndex + ".txt"));
+                printOutput(result, "request " + requestIndex, bw);
+                bw.close();
+                printLog("request " + requestIndex, logWriter, fail);
+                requestIndex++;
             }
         } catch (Exception ex) {
             System.out.println(ex.getMessage());
-            if (query.length() > 0) {
-                BufferedWriter logWriter = new BufferedWriter(new FileWriter(logFile, true));
-                printLog(query, logWriter, true);
-                logWriter.close();
-            }
         }
     }
 
@@ -161,18 +178,6 @@ public class Main {
                 BufferedWriter logWriter = new BufferedWriter(new FileWriter(logFile, true));
                 printLog(query, logWriter, true);
                 logWriter.close();
-            }
-        }
-    }
-
-    private static void parseLogicalExpr(String str) {
-        str = str.toLowerCase();
-        String[] exprs = str.split(" and ");
-        int from = -1;
-        int to = -1;
-        for (int i = 0; i < exprs.length; ++i) {
-            if (Company.EMPLOYEE_COUNT.equals(exprs[i] = exprs[i].substring(0, Company.EMPLOYEE_COUNT.length()))) {
-                if (exprs[i].charAt(0) == '<')
             }
         }
     }
