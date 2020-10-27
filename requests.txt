@@ -1,3 +1,2 @@
-select from company_table where employee_Count >= 1 and employee_Count<5
-select from company_table where shortname    = asa"
-select from company_table where type_of_business='a'
+select from company_table where shortname   = "a"
+select from company_table where employee_count >= 0 and employee_count < 20

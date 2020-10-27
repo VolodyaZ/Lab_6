@@ -7,10 +7,6 @@ import java.util.List;
 import java.util.Objects;
 
 class Company {
-    public static final String SHORTNAME = "shortname";
-    public static final String EMPLOYEE_COUNT = "employee_count";
-    public static final String TYPE_OF_BUSINESS = "type_of_business";
-
     private String name;
     private String shortName;
     private Date actualizationDate;

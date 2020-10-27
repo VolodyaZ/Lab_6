@@ -4,10 +4,8 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Scanner;
 import java.util.regex.Pattern;
@@ -29,52 +27,48 @@ public class Main {
             logFile = args[2];
         }
         try {
-            processQueriesSQL(inputFile, requestsFile, logFile);
+            CompanyQueries companies = readTable(inputFile);
+            processQueriesSQL(companies, requestsFile, logFile);
         } catch (Exception ex) {
             System.out.println(ex.getMessage());
         }
     }
 
-    public static void processQueriesSQL(String inputFile, String requestsFile, String logFile) throws IOException {
-        CompanyQueries company_table = new CompanyQueries();
-        //read from file
-        try (Scanner scanner = new Scanner(new File(inputFile))) {
+    public static CompanyQueries readTable(String inputFile) throws Exception {
+        CompanyQueries table = new CompanyQueries();
+        Scanner scanner = new Scanner(new File(inputFile));
             while (scanner.hasNextLine()) {
-                company_table.addCompany(new Company(scanner.nextLine()));
+                table.addCompany(new Company(scanner.nextLine()));
             }
-        } catch (Exception ex) {
-            System.out.println(ex.getMessage());
-        }
+        return table;
+    }
 
+    public static void processQueriesSQL(CompanyQueries companies, String requestsFile, String logFile) {
         //process queries here
-        String query = "";
         try (Scanner requestScanner = new Scanner(new File(requestsFile));
              BufferedWriter logWriter = new BufferedWriter(new FileWriter(logFile, true))
         ) {
             List<Company> result = new ArrayList<>();
             boolean fail = false;
             int requestIndex = 1;
-            while (!(query = requestScanner.next()).isEmpty()) {
-                try {
-                    if (query.toLowerCase().equals(SQLKeyWords.SELECT) &&
-                            requestScanner.next().toLowerCase().equals(SQLKeyWords.FROM) &&
-                            requestScanner.next().toLowerCase().equals(SQLKeyWords.TABLE_NAME) &&
-                            requestScanner.next().toLowerCase().equals(SQLKeyWords.WHERE)) {
-                        query = requestScanner.nextLine();
-                        query = query.toLowerCase();
-                        Scanner lineScan = new Scanner(query);
+            String query = "";
+            while (requestScanner.hasNextLine()) {
+                query = requestScanner.nextLine();
+                try (Scanner lineScan = new Scanner(query.toLowerCase())){
+                    if (lineScan.next().toLowerCase().equals(SQLKeyWords.SELECT) &&
+                            lineScan.next().toLowerCase().equals(SQLKeyWords.FROM) &&
+                            lineScan.next().toLowerCase().equals(SQLKeyWords.TABLE_NAME) &&
+                            lineScan.next().toLowerCase().equals(SQLKeyWords.WHERE)) {
                         String tmp;
-                        if (lineScan.findInLine(Pattern.compile(" +?" +
-                                Company.SHORTNAME +
-                                " +?= +?")) != null) {
-                            String name = lineScan.findInLine(Pattern.compile("[\"'][a-zA-Z][\"']"));
-                            result = company_table.findByShortName(name.substring(1, name.length() - 1));
-                        } else if (lineScan.findInLine(Pattern.compile("( +)?" +
-                                Company.TYPE_OF_BUSINESS +
+                        if (lineScan.findInLine(Pattern.compile(SQLKeyWords.SHORTNAME +
                                 "( +)?=( +)?")) != null) {
-                            String type = lineScan.findInLine(Pattern.compile("[\"'][a-zA-Z][\"']"));
-                            result = company_table.findByTypeOfBusiness(type.substring(1, type.length() - 1));
-                        } else if ((tmp = lineScan.findInLine(Pattern.compile(Company.EMPLOYEE_COUNT + "( +)?(>=|>)"))) != null) {
+                            String name = lineScan.findInLine(Pattern.compile("[\"'].*[\"']"));
+                            result = companies.findByShortName(name.substring(1, name.length() - 1));
+                        } else if (lineScan.findInLine(Pattern.compile(SQLKeyWords.TYPE_OF_BUSINESS +
+                                "( +)?=( +)?")) != null) {
+                            String type = lineScan.findInLine(Pattern.compile("[\"'].*[\"']"));
+                            result = companies.findByTypeOfBusiness(type.substring(1, type.length() - 1));
+                        } else if ((tmp = lineScan.findInLine(Pattern.compile(SQLKeyWords.EMPLOYEE_COUNT + "( +)?(>=|>)"))) != null) {
                             int from = -1;
                             int to = -1;
                             from = lineScan.nextInt();
@@ -82,13 +76,13 @@ public class Main {
                                 ++from;
                             }
                             if (lineScan.findInLine(SQLKeyWords.AND) != null &&
-                                    null != (tmp = lineScan.findInLine(Pattern.compile(Company.EMPLOYEE_COUNT + "( +)?(<=|<)")))) {
+                                    null != (tmp = lineScan.findInLine(Pattern.compile(SQLKeyWords.EMPLOYEE_COUNT + "( +)?(<=|<)")))) {
                                 to = lineScan.nextInt();
                                 if (tmp.charAt(tmp.length() - 1) != '=') {
                                     --to;
                                 }
                             }
-                            result = company_table.findByNumberOfEmployees(from, to);
+                            result = companies.findByNumberOfEmployees(from, to);
                         } else {
                             fail = true;
                         }
@@ -98,87 +92,15 @@ public class Main {
                 } catch(Exception e) {
                     fail = true;
                 }
-                BufferedWriter bw = new BufferedWriter(new FileWriter("request" + requestIndex + ".txt"));
-                printOutput(result, "request " + requestIndex, bw);
+                BufferedWriter bw = new BufferedWriter(new FileWriter("request" + requestIndex + ".csv"));
+                printOutput(result, "", bw);
                 bw.close();
-                printLog("request " + requestIndex, logWriter, fail);
+                printLog("request " + requestIndex + " : \"" + query + "\"", logWriter, fail);
                 requestIndex++;
+                fail = false;
             }
         } catch (Exception ex) {
             System.out.println(ex.getMessage());
-        }
-    }
-
-
-
-    public static void processQueries(String inputFile, String outputFile, String logFile) throws IOException {
-        CompanyQueries companies = new CompanyQueries();
-        //read from file
-        try (Scanner scanner = new Scanner(new File(inputFile))) {
-            while (scanner.hasNextLine()) {
-                companies.addCompany(new Company(scanner.nextLine()));
-            }
-        } catch (Exception ex) {
-            System.out.println(ex.getMessage());
-        }
-        //process queries here
-        String query = "";
-        try (Scanner scanner = new Scanner(System.in);
-             BufferedWriter outputWriter = new BufferedWriter(new FileWriter(outputFile));
-             BufferedWriter logWriter = new BufferedWriter(new FileWriter(logFile, true))
-             ) {
-            System.out.println("Available queries: \n" + SHORTNAME + " String, " +
-                    INDUSTRY + " String, " +
-                    TYPE_OF_BUSINESS + " String, " +
-                    FOUNDATION_DATE + " Date Date, " +
-                    NUMBER_OF_EMPLOYEES + " int int, " +
-                    EXIT);
-            while (!(query = scanner.next()).equals(EXIT)) {
-                List<Company> result;
-                switch (query) {
-                    case SHORTNAME:
-                        String sName = scanner.next();
-                        query += " " + sName;
-                        result = companies.findByShortName(sName);
-                        break;
-                    case INDUSTRY:
-                        String industry = scanner.next();
-                        query += " " + industry;
-                        result = companies.findByIndustry(industry);
-                        break;
-                    case TYPE_OF_BUSINESS:
-                        String type = scanner.next();
-                        query += " " + type;
-                        result = companies.findByTypeOfBusiness(type);
-                        break;
-                    case FOUNDATION_DATE:
-                        Date start = new SimpleDateFormat("dd/MM/yyyy").parse(scanner.next());
-                        Date end = new SimpleDateFormat("dd/MM/yyyy").parse(scanner.next());
-                        query += " " + start.toString() + " " + end.toString();
-                        result = companies.findByDateOfFoundation(start, end);
-                        break;
-                    case NUMBER_OF_EMPLOYEES:
-                        int min = scanner.nextInt();
-                        int max = scanner.nextInt();
-                        query += " " + min + " " + max;
-                        result = companies.findByNumberOfEmployees(min, max);
-                        break;
-                    default:
-                        scanner.nextLine();
-                        System.out.println("query " + query + " not found\n");
-                        printLog(query, logWriter, true);
-                        continue;
-                }
-                printLog(query, logWriter, false);
-                printOutput(result, query, outputWriter);
-            }
-        } catch (Exception ex) {
-            System.out.println(ex.getMessage());
-            if (query.length() > 0) {
-                BufferedWriter logWriter = new BufferedWriter(new FileWriter(logFile, true));
-                printLog(query, logWriter, true);
-                logWriter.close();
-            }
         }
     }
 
@@ -198,11 +120,4 @@ public class Main {
             writer.write(company.toString() + '\n');
         }
     }
-
-    static final String SHORTNAME = "SHORTNAME";
-    static final String INDUSTRY = "INDUSTRY";
-    static final String TYPE_OF_BUSINESS = "TYPE_OF_BUSINESS";
-    static final String FOUNDATION_DATE = "FOUNDATION_DATE";
-    static final String NUMBER_OF_EMPLOYEES = "NUMBER_OF_EMPLOYEES";
-    static final String EXIT = "EXIT";
 }

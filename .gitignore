@@ -3,5 +3,4 @@ out/
 .idea/
 *.iml
 log.txt
-request*.txt
-!requests.txt
+request*.csv
