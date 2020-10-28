@@ -10,4 +10,6 @@ public class SQLKeyWords {
     public static final String SHORTNAME = "shortname";
     public static final String EMPLOYEE_COUNT = "employee_count";
     public static final String TYPE_OF_BUSINESS = "type_of_business";
+
+    private SQLKeyWords() {}
 }
