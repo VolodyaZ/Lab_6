@@ -1,0 +1,2 @@
+select from company_table where shortname   = "a"
+select from company_table where employee_count >= 0 and employee_count < 20
